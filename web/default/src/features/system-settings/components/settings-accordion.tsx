@@ -1,0 +1,52 @@
+/*
+Copyright (C) 2026 codego-api contributors
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+*/
+import {
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from '@/components/ui/accordion'
+
+type SettingsAccordionProps = {
+  value: string
+  title: string
+  description?: string
+  children: React.ReactNode
+  className?: string
+}
+
+export function SettingsAccordion({
+  value,
+  title,
+  description,
+  children,
+  className,
+}: SettingsAccordionProps) {
+  return (
+    <AccordionItem value={value} className={className}>
+      <AccordionTrigger className='hover:no-underline'>
+        <div className='flex flex-col gap-1 text-left'>
+          <div className='text-base font-semibold'>{title}</div>
+          {description && (
+            <div className='text-muted-foreground text-sm'>{description}</div>
+          )}
+        </div>
+      </AccordionTrigger>
+      <AccordionContent className='pt-4'>{children}</AccordionContent>
+    </AccordionItem>
+  )
+}

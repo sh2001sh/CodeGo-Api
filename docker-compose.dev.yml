@@ -1,0 +1,180 @@
+# Frontend development - codego-api runtime built from local source
+#
+# Usage:
+#   1. docker compose -f docker-compose.dev.yml up -d
+#   2. cd web/default && bun install && bun run dev
+#   3. Open http://localhost:3001 (Rsbuild dev server, API auto-proxied to :3000)
+#
+# Rebuild backend after Go code changes:
+#   docker compose -f docker-compose.dev.yml up -d --build
+#
+# Stop:
+#   docker compose -f docker-compose.dev.yml down
+#
+# Reset data:
+#   docker compose -f docker-compose.dev.yml down -v
+
+services:
+  db-migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      args:
+        APP_PATH: ./cmd/db-migrate
+    environment: &migration-environment
+      SQL_DSN: postgresql://root:${DEV_POSTGRES_PASSWORD:-change-me-in-development}@postgres:5432/codego-api
+      TZ: Asia/Shanghai
+      NODE_TYPE: master
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["--bootstrap"]
+    restart: "no"
+    networks:
+      - dev-network
+
+  v2-verify:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      args:
+        APP_PATH: ./cmd/v2-verify
+    image: codego-api-dev-v2-verify:local
+    profiles: ["verify"]
+    environment:
+      <<: *migration-environment
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+    restart: "no"
+    networks:
+      - dev-network
+
+  control-api:
+    build: &development-build
+      context: .
+      dockerfile: Dockerfile.dev
+      args:
+        APP_PATH: ./cmd/control-api
+    image: codego-api-dev-control-api:local
+    ports:
+      - "3000:3000"
+    volumes:
+      - dev_data:/data
+    environment: &runtime-environment
+      SQL_DSN: postgresql://root:${DEV_POSTGRES_PASSWORD:-change-me-in-development}@postgres:5432/codego-api
+      REDIS_CONN_STRING: redis://redis:6379
+      TZ: Asia/Shanghai
+      BATCH_UPDATE_ENABLED: "true"
+      SESSION_COOKIE_SECURE: "false"
+      NODE_TYPE: master
+      CONTROL_PORT: "3000"
+      NODE_NAME: control-api-dev
+      TEMPORAL_HOSTPORT: temporal:7233
+      TEMPORAL_NAMESPACE: default
+    depends_on: &runtime-depends-on
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
+      temporal:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - dev-network
+
+  gateway-api:
+    build:
+      <<: *development-build
+      args:
+        APP_PATH: ./cmd/gateway-api
+    image: codego-api-dev-gateway-api:local
+    ports:
+      - "3001:3001"
+    environment:
+      <<: *runtime-environment
+      NODE_TYPE: slave
+      GATEWAY_PORT: "3001"
+      NODE_NAME: gateway-api-dev
+    depends_on: *runtime-depends-on
+    restart: unless-stopped
+    networks:
+      - dev-network
+
+  workflow-worker:
+    build:
+      <<: *development-build
+      args:
+        APP_PATH: ./cmd/workflow-worker
+    image: codego-api-dev-workflow-worker:local
+    environment:
+      <<: *runtime-environment
+      TEMPORAL_HOSTPORT: temporal:7233
+      NODE_NAME: workflow-worker-dev
+    depends_on:
+      <<: *runtime-depends-on
+    restart: unless-stopped
+    networks:
+      - dev-network
+
+  ledger-worker:
+    build:
+      <<: *development-build
+      args:
+        APP_PATH: ./cmd/ledger-worker
+    image: codego-api-dev-ledger-worker:local
+    environment:
+      <<: *runtime-environment
+      NODE_NAME: ledger-worker-dev
+    depends_on: *runtime-depends-on
+    restart: unless-stopped
+    networks:
+      - dev-network
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks:
+      - dev-network
+
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: ${DEV_POSTGRES_PASSWORD:-change-me-in-development}
+      POSTGRES_DB: codego-api
+    volumes:
+      - dev_pg_data:/var/lib/postgresql/data
+    networks:
+      - dev-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U root -d codego-api"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  temporal:
+    image: temporalio/auto-setup:1.25.2
+    environment:
+      DB: postgres12
+      DB_PORT: "5432"
+      POSTGRES_SEEDS: postgres
+      POSTGRES_USER: root
+      POSTGRES_PWD: "${DEV_POSTGRES_PASSWORD:-change-me-in-development}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - dev-network
+
+volumes:
+  dev_data:
+  dev_pg_data:
+
+networks:
+  dev-network:
+    driver: bridge

@@ -1,0 +1,240 @@
+name: Publish Docker image (Multi-arch)
+
+concurrency:
+  group: docker-image-publish
+  cancel-in-progress: true
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - '*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Optional tag name to build; empty uses the selected branch commit'
+        required: false
+        type: string
+
+env:
+  DOCKER_IMAGE: docker.io/s2644752646/codego-api
+
+jobs:
+  build_single_arch:
+    name: Build & push (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      # Native runners build their own architecture without emulation.
+      max-parallel: 2
+      matrix:
+        arch: [amd64, arm64]
+    runs-on: ${{ matrix.arch == 'amd64' && 'ubuntu-latest' || 'ubuntu-24.04-arm' }}
+    timeout-minutes: 35
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: ${{ github.event_name == 'workflow_dispatch' && 0 || 1 }}
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Resolve tag & write VERSION
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+            if ! git rev-parse "refs/tags/$TAG" >/dev/null 2>&1; then
+              echo "::error::Tag '$TAG' does not exist"
+              exit 1
+            fi
+          elif [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+            TAG="sha-$(git rev-parse --short HEAD)"
+          else
+            TAG=${GITHUB_REF#refs/tags/}
+          fi
+          echo "TAG=${TAG}" >> $GITHUB_ENV
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "${TAG}" > VERSION
+          echo "Building tag: ${TAG} for ${{ matrix.arch }}"
+
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          # A removable BuildKit container lets cancellation stop a blocked
+          # registry upload instead of leaving a daemon-side build behind.
+          driver: docker-container
+          driver-opts: network=host
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Verify authenticated base image access
+        run: |
+          pull_with_retry() {
+            local image="$1"
+            local attempt=1
+            local delay=15
+
+            while ! docker pull "$image"; do
+              if [ "$attempt" -ge 4 ]; then
+                echo "::error::Unable to pull $image after $attempt authenticated attempts"
+                return 1
+              fi
+              echo "Base image pull failed (attempt ${attempt}); retrying in ${delay}s"
+              sleep "$delay"
+              attempt=$((attempt + 1))
+              delay=$((delay * 2))
+            done
+          }
+
+          pull_with_retry 'oven/bun:1@sha256:0733e50325078969732ebe3b15ce4c4be5082f18c4ac1a0f0ca4839c2e4e42a7'
+          pull_with_retry 'golang:1.26.1-alpine@sha256:2389ebfa5b7f43eeafbd6be0c3700cc46690ef842ad962f6c5bd6be49ed82039'
+          pull_with_retry 'debian:bookworm-slim@sha256:f06537653ac770703bc45b4b113475bd402f451e85223f0f2837acbf89ab020a'
+
+      - name: Build and push control-api
+        env:
+          SERVICE: control-api
+          ARCH: ${{ matrix.arch }}
+          BUILDER_NAME: ${{ steps.buildx.outputs.name }}
+        run: bash .github/scripts/build-and-push-service.sh
+
+      - name: Build and push gateway-api
+        env:
+          SERVICE: gateway-api
+          ARCH: ${{ matrix.arch }}
+          BUILDER_NAME: ${{ steps.buildx.outputs.name }}
+        run: bash .github/scripts/build-and-push-service.sh
+
+      - name: Build and push ledger-worker
+        env:
+          SERVICE: ledger-worker
+          ARCH: ${{ matrix.arch }}
+          BUILDER_NAME: ${{ steps.buildx.outputs.name }}
+        run: bash .github/scripts/build-and-push-service.sh
+
+      - name: Build and push workflow-worker
+        env:
+          SERVICE: workflow-worker
+          ARCH: ${{ matrix.arch }}
+          BUILDER_NAME: ${{ steps.buildx.outputs.name }}
+        run: bash .github/scripts/build-and-push-service.sh
+
+      - name: Build and push db-migrate
+        env:
+          SERVICE: db-migrate
+          ARCH: ${{ matrix.arch }}
+          BUILDER_NAME: ${{ steps.buildx.outputs.name }}
+        run: bash .github/scripts/build-and-push-service.sh
+
+      - name: Build and push v2-verify
+        env:
+          SERVICE: v2-verify
+          ARCH: ${{ matrix.arch }}
+          BUILDER_NAME: ${{ steps.buildx.outputs.name }}
+        run: bash .github/scripts/build-and-push-service.sh
+
+      - name: Tear down Docker Buildx
+        if: always()
+        env:
+          BUILDER_NAME: ${{ steps.buildx.outputs.name }}
+        run: docker buildx rm --force "${BUILDER_NAME}" || true
+
+  create_manifests:
+    name: Create and sign multi-arch manifests
+    needs: [build_single_arch]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Resolve version
+        run: |
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          elif [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+            TAG="sha-${GITHUB_SHA::7}"
+          else
+            TAG=${GITHUB_REF#refs/tags/}
+          fi
+          echo "TAG=${TAG}" >> $GITHUB_ENV
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Create and push service manifests
+        run: |
+          create_manifest() {
+            local target="$1"
+            shift
+            local attempt=1
+            local delay=15
+
+            while ! docker buildx imagetools create -t "$target" "$@"; do
+              if [ "$attempt" -ge 6 ]; then
+                echo "::error::Failed to create $target after $attempt attempts"
+                return 1
+              fi
+              echo "Manifest creation failed (attempt $attempt); retrying in ${delay}s"
+              sleep "$delay"
+              attempt=$((attempt + 1))
+              delay=$((delay * 2))
+            done
+          }
+
+          for service in control-api gateway-api ledger-worker workflow-worker db-migrate v2-verify; do
+            create_manifest \
+              "${{ env.DOCKER_IMAGE }}:${TAG}-${service}" \
+              "${{ env.DOCKER_IMAGE }}:${TAG}-${service}-amd64" \
+              "${{ env.DOCKER_IMAGE }}:${TAG}-${service}-arm64"
+            create_manifest \
+              "${{ env.DOCKER_IMAGE }}:latest-${service}" \
+              "${{ env.DOCKER_IMAGE }}:latest-${service}-amd64" \
+              "${{ env.DOCKER_IMAGE }}:latest-${service}-arm64"
+          done
+          create_manifest "${{ env.DOCKER_IMAGE }}:${TAG}" "${{ env.DOCKER_IMAGE }}:${TAG}-control-api"
+          create_manifest "${{ env.DOCKER_IMAGE }}:latest" "${{ env.DOCKER_IMAGE }}:latest-control-api"
+
+      - name: Set up Go for cosign
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.1'
+          cache: false
+
+      - name: Install cosign from source
+        run: |
+          go install github.com/sigstore/cosign/v3/cmd/cosign@v3.0.6
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Sign multi-arch manifests with cosign
+        run: |
+          for service in control-api gateway-api ledger-worker workflow-worker db-migrate v2-verify; do
+            cosign sign --yes "${{ env.DOCKER_IMAGE }}:${TAG}-${service}"
+            cosign sign --yes "${{ env.DOCKER_IMAGE }}:latest-${service}"
+          done
+          cosign sign --yes "${{ env.DOCKER_IMAGE }}:${TAG}"
+          cosign sign --yes "${{ env.DOCKER_IMAGE }}:latest"
+
+      - name: Manifest summary
+        run: |
+          for service in control-api gateway-api ledger-worker workflow-worker db-migrate v2-verify; do
+            echo "### Multi-arch Manifest: ${service}" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            docker buildx imagetools inspect "${{ env.DOCKER_IMAGE }}:${TAG}-${service}" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          done

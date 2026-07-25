@@ -1,0 +1,126 @@
+# codego-api production runtime.
+#
+# Required .env values: SQL_DSN, REDIS_CONN_STRING, POSTGRES_PASSWORD.
+# Start the runtime: docker compose up -d
+
+services:
+  db-migrate:
+    image: ${CODEGO_API_IMAGE:-docker.io/s2644752646/codego-api}:${CODEGO_API_VERSION:-latest}-db-migrate
+    environment: &migration-environment
+      SQL_DSN: ${SQL_DSN:?set SQL_DSN in .env}
+      TZ: ${TZ:-Asia/Shanghai}
+      NODE_TYPE: master
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  v2-verify:
+    image: ${CODEGO_API_IMAGE:-docker.io/s2644752646/codego-api}:${CODEGO_API_VERSION:-latest}-v2-verify
+    profiles: ["verify"]
+    environment:
+      <<: *migration-environment
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+    restart: "no"
+
+  control-api:
+    image: ${CODEGO_API_IMAGE:-docker.io/s2644752646/codego-api}:${CODEGO_API_VERSION:-latest}-control-api
+    environment: &runtime-environment
+      SQL_DSN: ${SQL_DSN:?set SQL_DSN in .env}
+      REDIS_CONN_STRING: ${REDIS_CONN_STRING:?set REDIS_CONN_STRING in .env}
+      TZ: ${TZ:-Asia/Shanghai}
+      NODE_TYPE: master
+      CONTROL_PORT: "3000"
+      NODE_NAME: ${CONTROL_NODE_NAME:-control-api-1}
+      TEMPORAL_HOSTPORT: ${TEMPORAL_HOSTPORT:-temporal:7233}
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
+    ports:
+      - "${CONTROL_PORT:-3000}:3000"
+    depends_on: &runtime-depends-on
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      db-migrate:
+        condition: service_completed_successfully
+      temporal:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:3000/api/status | grep -Eq '\"success\":[[:space:]]*true' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+  gateway-api:
+    image: ${CODEGO_API_IMAGE:-docker.io/s2644752646/codego-api}:${CODEGO_API_VERSION:-latest}-gateway-api
+    environment:
+      <<: *runtime-environment
+      NODE_TYPE: slave
+      GATEWAY_PORT: "3001"
+      NODE_NAME: ${GATEWAY_NODE_NAME:-gateway-api-1}
+    ports:
+      - "${GATEWAY_PORT:-3001}:3001"
+    depends_on: *runtime-depends-on
+    restart: unless-stopped
+
+  workflow-worker:
+    image: ${CODEGO_API_IMAGE:-docker.io/s2644752646/codego-api}:${CODEGO_API_VERSION:-latest}-workflow-worker
+    environment:
+      <<: *runtime-environment
+      TEMPORAL_HOSTPORT: ${TEMPORAL_HOSTPORT:-temporal:7233}
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
+      NODE_NAME: ${WORKFLOW_NODE_NAME:-workflow-worker-1}
+    depends_on:
+      <<: *runtime-depends-on
+    restart: unless-stopped
+
+  ledger-worker:
+    image: ${CODEGO_API_IMAGE:-docker.io/s2644752646/codego-api}:${CODEGO_API_VERSION:-latest}-ledger-worker
+    environment:
+      <<: *runtime-environment
+      NODE_NAME: ${LEDGER_NODE_NAME:-ledger-worker-1}
+    depends_on: *runtime-depends-on
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+  temporal:
+    image: temporalio/auto-setup:1.25.2
+    environment:
+      DB: postgres12
+      DB_PORT: "5432"
+      POSTGRES_SEEDS: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-codegoapi}
+      POSTGRES_PWD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-codegoapi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-codegoapi}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:

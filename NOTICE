@@ -1,0 +1,39 @@
+codego-api Notices
+
+codego-api is distributed under the GNU Affero General Public License v3.0.
+See LICENSE for the complete license text.
+
+Copyright (C) 2026 codego-api contributors.
+
+The codego-api source in this repository is released under the GNU Affero
+General Public License v3.0. The source is maintained as an API unified
+management platform and is not an API reseller or intermediary service.
+
+This project contains material derived from New API. Copyright notices and
+license terms required by the original project and its dependencies remain
+applicable to the corresponding source files.
+
+The original project is available at:
+https://github.com/QuantumNous/new-api
+
+Modified versions must not misrepresent the origin of the software and must
+mark their changes in accordance with AGPLv3 Section 7(c).
+
+Third-party notices for direct dependencies are listed in
+THIRD-PARTY-LICENSES.md. Preserve that file with distributed binaries and
+container images.
+
+Apache-2.0 notices reproduced for direct dependencies:
+
+AWS SDK for Go
+Copyright 2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+Copyright 2014-2015 Stripe, Inc.
+
+smithy-go
+Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+
+otp
+Copyright (c) 2014, Paul Querna
+
+This product includes software developed by Paul Querna
+(http://paul.querna.org/).

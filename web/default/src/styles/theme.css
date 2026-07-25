@@ -1,0 +1,169 @@
+/*
+Copyright (C) 2026 codego-api contributors
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+*/
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: 'Public Sans', sans-serif;
+  --font-inter:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu',
+    'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  --font-manrope:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu',
+    'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-neutral: var(--neutral);
+  --color-neutral-foreground: var(--neutral-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  --radius: 0.5rem;
+  --app-header-height: 3rem;
+  --background: #faf7f3;
+  --foreground: #221f1c;
+  --card: #fdfcfb;
+  --card-foreground: #221f1c;
+  --popover: #fdfcfb;
+  --popover-foreground: #221f1c;
+  --primary: #b8562e;
+  --primary-foreground: #fff8f3;
+  --secondary: #f1ece3;
+  --secondary-foreground: #4a3428;
+  --muted: #f3eee6;
+  --muted-foreground: #6f665e;
+  --accent: #f4e2d0;
+  --accent-foreground: #6b4326;
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+  --success: oklch(0.596 0.145 163.225);
+  --success-foreground: oklch(0.985 0 0);
+  --warning: #c68a2e;
+  --warning-foreground: oklch(0.145 0 0);
+  --info: #5b7ca0;
+  --info-foreground: oklch(0.985 0 0);
+  --neutral: oklch(0.708 0 0);
+  --neutral-foreground: oklch(0.145 0 0);
+  --border: rgb(150 138 122 / 18%);
+  --input: rgb(150 138 122 / 12%);
+  --ring: #b8562e;
+  --chart-1: #b8562e;
+  --chart-2: #d9985a;
+  --chart-3: #8a6a4a;
+  --chart-4: #c9a227;
+  --chart-5: #6b4a35;
+  --sidebar: #fdfcfb;
+  --sidebar-foreground: #221f1c;
+  --sidebar-primary: #b8562e;
+  --sidebar-primary-foreground: #fff8f3;
+  --sidebar-accent: #f4e2d0;
+  --sidebar-accent-foreground: #4a3428;
+  --sidebar-border: rgb(150 138 122 / 14%);
+  --sidebar-ring: #b8562e;
+  --skeleton-base: #ece5db;
+  --skeleton-highlight: #fbf8f4;
+}
+
+.dark {
+  --background: #1c1917;
+  --foreground: #f3ede3;
+  --card: #262220;
+  --card-foreground: #f3ede3;
+  --popover: #262220;
+  --popover-foreground: #f3ede3;
+  --primary: #e08a52;
+  --primary-foreground: #241209;
+  --secondary: #33291f;
+  --secondary-foreground: #f3ede3;
+  --muted: #2c2622;
+  --muted-foreground: #c2b6a8;
+  --accent: #3a2a1c;
+  --accent-foreground: #f0d9bd;
+  --destructive: oklch(0.704 0.191 22.216);
+  --destructive-foreground: oklch(0.985 0 0);
+  --success: oklch(0.696 0.17 162.48);
+  --success-foreground: oklch(0.145 0 0);
+  --warning: #e0a94f;
+  --warning-foreground: oklch(0.145 0 0);
+  --info: #90a5bd;
+  --info-foreground: oklch(0.145 0 0);
+  --neutral: oklch(0.76 0 0);
+  --neutral-foreground: oklch(0.145 0 0);
+  --border: rgb(196 178 156 / 16%);
+  --input: rgb(196 178 156 / 12%);
+  --ring: #e08a52;
+  --chart-1: #e08a52;
+  --chart-2: #e8b183;
+  --chart-3: #b09274;
+  --chart-4: #d9bd6c;
+  --chart-5: #9c7c5c;
+  --sidebar: #201c19;
+  --sidebar-foreground: #f3ede3;
+  --sidebar-primary: #e08a52;
+  --sidebar-primary-foreground: #241209;
+  --sidebar-accent: #3a2a1c;
+  --sidebar-accent-foreground: #f0d9bd;
+  --sidebar-border: rgb(196 178 156 / 16%);
+  --sidebar-ring: #e08a52;
+  --skeleton-base: #2a2521;
+  --skeleton-highlight: #35302a;
+}
