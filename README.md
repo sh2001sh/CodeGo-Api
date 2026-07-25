@@ -1,6 +1,14 @@
-# codego-api
+<p align="center">
+  <img src="./web/default/public/code-go-logo.svg" alt="codego-api logo" width="128">
+</p>
 
-面向团队与开发者的 API 统一管理平台。
+<h1 align="center">codego-api</h1>
+
+<p align="center">面向团队与开发者的 API 统一管理平台</p>
+
+<p align="center">
+  <a href="./README.en.md">English</a>
+</p>
 
 <p align="center">
   <a href="https://shu26.cfd/">官网</a> ·
